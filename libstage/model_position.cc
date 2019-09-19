@@ -171,6 +171,7 @@ Velocity ModelPosition::GetGlobalVelocity() const
   Velocity gv;
   gv.x = velocity.x * cosa - velocity.y * sina;
   gv.y = velocity.x * sina + velocity.y * cosa;
+  gv.z = velocity.z;
   gv.a = velocity.a;
 
   return gv;
@@ -187,6 +188,7 @@ void ModelPosition::SetGlobalVelocity(const Velocity &gv)
   Velocity lv;
   lv.x = gv.x * cosa + gv.y * sina;
   lv.y = -gv.x * sina + gv.y * cosa;
+  lv.z = gv.z;
   lv.a = gv.a;
 
   this->SetVelocity(lv);
@@ -209,6 +211,8 @@ void ModelPosition::Load(void)
       drive_mode = DRIVE_OMNI;
     else if (mode_str == "car")
       drive_mode = DRIVE_CAR;
+    else if (mode_str == "door")
+      drive_mode = DOOR;
     else
       PRINT_ERR1("invalid position drive mode specified: \"%s\" - should be "
                  "one of: \"diff\", \"omni\" or \"car\". Using \"diff\" as "
@@ -242,8 +246,10 @@ void ModelPosition::Load(void)
   const double sina = sin(est_origin.a);
   const double dx = gpose.x - est_origin.x;
   const double dy = gpose.y - est_origin.y;
+  const double dz = gpose.z - est_origin.z;
   est_pose.x = dx * cosa + dy * sina;
   est_pose.y = dy * cosa - dx * sina;
+  est_pose.z = dz;
 
   // zero position error: assume we know exactly where we are on startup
   est_pose_error.Zero(); // memset( &est_pose_error, 0, sizeof(est_pose_error));
@@ -284,6 +290,8 @@ void ModelPosition::Update(void)
 {
   PRINT_DEBUG1("[%lu] position update", this->world->SimTimeNow());
 
+  //flag for door position
+  int flag = 0;
   // stop by default
   Velocity vel(0, 0, 0, 0);
 
@@ -336,7 +344,6 @@ void ModelPosition::Update(void)
         // vel.y = 0;
         // vel.a = goal.x * sin(goal.a)/wheelbase;
         break;
-
       default: PRINT_ERR1("unknown steering mode %d", drive_mode);
       }
 
@@ -373,7 +380,14 @@ void ModelPosition::Update(void)
         vel.y = 0;
         vel.a = goal.x * sin(goal.a) / wheelbase;
         break;
-
+      case DOOR:
+        // direct steering model, like an omnidirectional robot
+        vel.x = goal.x;
+        vel.y = goal.y;
+        vel.z = goal.z;
+        vel.a = goal.a;
+        //PRINT_ERR1("\nvelocidad %f",vel.z);
+        break;
       default: PRINT_ERR1("unknown steering mode %d", drive_mode);
       }
     } break;
@@ -383,6 +397,7 @@ void ModelPosition::Update(void)
 
       const double x_error = goal.x - est_pose.x;
       const double y_error = goal.y - est_pose.y;
+      const double z_error = goal.z - est_pose.z;
       double a_error = normalize(goal.a - est_pose.a);
 
       PRINT_DEBUG3("errors: %.2f %.2f %.2f\n", x_error, y_error, a_error);
@@ -391,6 +406,7 @@ void ModelPosition::Update(void)
       // TODO - have these configurable
       const double max_speed_x = 0.4;
       const double max_speed_y = 0.4;
+      const double max_speed_z = 0.4;
       const double max_speed_a = 1.0;
 
       switch (drive_mode) {
@@ -447,7 +463,21 @@ void ModelPosition::Update(void)
         vel.y = 0;
         vel.a = calc.a;
       } break;
-
+      case DOOR: {
+        // this is easy - we just reduce the errors in each axis
+        // independently with a proportional controller, speed
+        // limited
+        vel.x = std::min(x_error, max_speed_x);
+        vel.y = std::min(y_error, max_speed_y);
+        const Pose globagpose = this->GetGlobalPose();
+        vel.z = z_error;
+        if(globagpose.z <= 0 && vel.z < 0)
+          vel.z = 0;
+        if(globagpose.z >= 1 && vel.z > 0)
+          vel.z = 0;
+        vel.a = std::min(a_error, max_speed_a);
+        PRINT_ERR3("\n z:%f z_error:%f vel.z:%f!",globagpose.z, z_error, vel.z);
+      } break;
       default: PRINT_ERR1("unknown steering mode %d", (int)drive_mode);
       }
     } break;
@@ -469,10 +499,21 @@ void ModelPosition::Update(void)
     vel.x = velocity_bounds[0].Constrain(vel.x);
     vel.y = velocity_bounds[1].Constrain(vel.y);
     vel.z = velocity_bounds[2].Constrain(vel.z);
+    //TO MODIFY THE POSITION OF THE DOOR DIRECTLY
+    if(vel.z > 0 && !flag){
+      vel.z = 10;
+      flag = 1;
+    }
+    if(vel.z < 0){
+      vel.z = -10;
+      flag =0;
+    }
+      
+     //velocity_bounds[2].Constrain(vel.z);
     vel.a = velocity_bounds[3].Constrain(vel.a);
 
-    // printf( "final vel: %.2f %.2f %.2f\n",
-    // vel.x, vel.y, vel.a );
+    //printf( "final vel: %.2f %.2f %.2f\n",
+    // vel.x, vel.y, vel.z );
 
     this->SetVelocity(vel);
   }
@@ -508,9 +549,11 @@ void ModelPosition::Update(void)
     const double sina = sin(est_pose.a);
     const double dx = (vel.x * dt) * (1.0 + integration_error.x);
     const double dy = (vel.y * dt) * (1.0 + integration_error.y);
-
+    const double dz = (vel.z * dt) * (1.0 + integration_error.z);
     est_pose.x += dx * cosa + dy * sina;
     est_pose.y -= dy * cosa - dx * sina;
+    est_pose.z = dz;
+    
   } break;
 
   default:
@@ -589,15 +632,15 @@ void ModelPosition::Shutdown(void)
 
 void ModelPosition::Stop()
 {
-  SetSpeed(0, 0, 0);
+  SetSpeed(0, 0, 0, 0);
 }
 
-void ModelPosition::SetSpeed(double x, double y, double a)
+void ModelPosition::SetSpeed(double x, double y, double z, double a)
 {
   control_mode = CONTROL_VELOCITY;
   goal.x = x;
   goal.y = y;
-  goal.z = 0;
+  goal.z = z;
   goal.a = a;
 }
 
@@ -634,12 +677,12 @@ void ModelPosition::SetSpeed(Velocity vel)
   goal.a = vel.a;
 }
 
-void ModelPosition::GoTo(double x, double y, double a)
+void ModelPosition::GoTo(double x, double y, double z, double a)
 {
   control_mode = CONTROL_POSITION;
   goal.x = x;
   goal.y = y;
-  goal.z = 0;
+  goal.z = z;
   goal.a = a;
 }
 
@@ -670,10 +713,11 @@ void ModelPosition::SetOdom(Pose odom)
   const double da = normalize(-odom.a + gp.a);
   const double dx = -odom.x * cos(da) + odom.y * sin(da);
   const double dy = -odom.y * cos(da) - odom.x * sin(da);
-
+  const double dz = odom.z;
   // origin of our estimated pose
   est_origin.x = gp.x + dx;
   est_origin.y = gp.y + dy;
+  est_origin.z = gp.z + dz;
   est_origin.a = da;
 }
 

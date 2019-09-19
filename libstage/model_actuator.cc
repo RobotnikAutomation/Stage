@@ -72,7 +72,7 @@ ModelActuator::ModelActuator(World *world, Model *parent, const std::string &typ
   // sensible position defaults
   // this->SetVelocity( Velocity(0,0,0,0) );
   this->SetBlobReturn(true);
-
+  PRINT_ERR("Creation of Model Actuator");
   // Allow the models to move
   // VelocityEnable();
 }
@@ -185,8 +185,8 @@ void ModelActuator::Update(void)
   default: PRINT_ERR1("unrecognized actuator type %d", actuator_type);
   }
 
-  if (this->subs) // no driving if noone is subscribed
-  {
+  //if (this->subs) // no driving if noone is subscribed
+  //{
     // stop by default
     double velocity = 0;
     switch (control_mode) {
@@ -200,7 +200,7 @@ void ModelActuator::Update(void)
     } break;
 
     case CONTROL_POSITION: {
-      PRINT_DEBUG("actuator position control mode");
+      PRINT_ERR("actuator position control mode");
 
       // limit our axis
       if (goal < min_position)
@@ -247,7 +247,7 @@ void ModelActuator::Update(void)
     // this->GPoseDirtyTree();
     PRINT_DEBUG4(" Set Velocity: [ %.4f %.4f %.4f %.4f ]\n", outvel.x, outvel.y, outvel.z,
                  outvel.a);
-  }
+  //}
 
   Model::Update();
 }
@@ -273,12 +273,14 @@ void ModelActuator::Shutdown(void)
 
 void ModelActuator::SetSpeed(double speed)
 {
+  PRINT_ERR("\nSetSpeed called!\n");
   control_mode = CONTROL_VELOCITY;
   goal = speed;
 }
 
 void ModelActuator::GoTo(double pos)
 {
+  PRINT_ERR1("\nGoTo called! subs:%d\n",this->subs);
   control_mode = CONTROL_POSITION;
   goal = pos;
 }

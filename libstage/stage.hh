@@ -2786,7 +2786,7 @@ public:
   typedef enum { LOCALIZATION_GPS, LOCALIZATION_ODOM } LocalizationMode;
 
   /** Define a driving method */
-  typedef enum { DRIVE_DIFFERENTIAL, DRIVE_OMNI, DRIVE_CAR } DriveMode;
+  typedef enum { DRIVE_DIFFERENTIAL, DRIVE_OMNI, DRIVE_CAR, DOOR } DriveMode;
 
 private:
   Velocity velocity;
@@ -2854,7 +2854,7 @@ Models and visualized. */
 
   /** Sets the control_mode to CONTROL_VELOCITY and sets
 the goal velocity. */
-  void SetSpeed(double x, double y, double a);
+  void SetSpeed(double x, double y, double z, double a);
   void SetXSpeed(double x);
   void SetYSpeed(double y);
   void SetZSpeed(double z);
@@ -2865,7 +2865,7 @@ the goal velocity. */
 
   /** Sets the control mode to CONTROL_POSITION and sets
 the goal pose */
-  void GoTo(double x, double y, double a);
+  void GoTo(double x, double y, double z, double a);
   void GoTo(Pose pose);
 
   /** Sets the control mode to CONTROL_ACCELERATION and sets the

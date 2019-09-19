@@ -65,9 +65,9 @@ ModelGripper::ModelGripper(World *world, Model *parent, const std::string &type)
       cmd(CMD_NOOP)
 {
   // set up a gripper-specific config structure
-  cfg.paddle_size.x = 0.66; // proportion of body length that is paddles
-  cfg.paddle_size.y = 0.1; // proportion of body width that is paddles
-  cfg.paddle_size.z = 0.4; // proportion of body height that is paddles
+  cfg.paddle_size.x = 0.75; //0.66; // proportion of body length that is paddles
+  cfg.paddle_size.y = 0.2; //0.1; // proportion of body width that is paddles
+  cfg.paddle_size.z = 0.4; //0.4; // proportion of body height that is paddles
 
   cfg.paddles = PADDLE_OPEN;
   cfg.lift = LIFT_DOWN;
@@ -84,6 +84,9 @@ ModelGripper::ModelGripper(World *world, Model *parent, const std::string &type)
   // place the break beam sensors at 1/4 and 3/4 the length of the paddle
   cfg.break_beam_inset[0] = 3.0 / 4.0 * cfg.paddle_size.x;
   cfg.break_beam_inset[1] = 1.0 / 4.0 * cfg.paddle_size.x;
+  cfg.break_beam_inset[2] = 1.0 / 5.0 * cfg.paddle_size.x;
+  cfg.break_beam_inset[3] = 1.0  * cfg.paddle_size.x;
+  cfg.break_beam_inset[4] = 0;
 
   cfg.close_limit = 1.0;
 
@@ -95,7 +98,9 @@ ModelGripper::ModelGripper(World *world, Model *parent, const std::string &type)
   thread_safe = false;
 
   // set default size
-  SetGeom(Geom(Pose(0, 0, 0, 0), Size(0.2, 0.3, 0.2)));
+  //SetGeom(Geom(Pose(0, 0, 0, 0), Size(0.5, 0.3, 0.2)));
+
+  SetGeom(Geom(Pose(0, 0, 0, 0), Size(0.75, 0.2, 0.4)));
 
   PositionPaddles();
 
@@ -183,10 +188,13 @@ void ModelGripper::FixBlocks()
 
   // add three blocks that make the gripper
   // base
-  AddBlockRect(0, 0, 1.0 - cfg.paddle_size.x, 1.0, 1.0);
-  AddBlockRect(1.0 - cfg.paddle_size.x, 0, cfg.paddle_size.x, cfg.paddle_size.y, cfg.paddle_size.z);
-  AddBlockRect(1.0 - cfg.paddle_size.x, 1.0 - cfg.paddle_size.y, cfg.paddle_size.x,
-               cfg.paddle_size.y, cfg.paddle_size.z);
+  //AddBlockRect(0, 0, (1.0 - cfg.paddle_size.x), 1.0, 1.0);
+  //AddBlockRect((1.0 - cfg.paddle_size.x), 0, cfg.paddle_size.x, cfg.paddle_size.y, cfg.paddle_size.z);
+  //AddBlockRect((1.0 - cfg.paddle_size.x), (1.0 - cfg.paddle_size.y), cfg.paddle_size.x,
+   //           cfg.paddle_size.y, cfg.paddle_size.z);
+  AddBlockRect(0, 0, 0.0, 0.0, 0.0);
+  AddBlockRect(0, 0, 0.0, 0.0, 0.0);
+  AddBlockRect(0, 0, 0.0, 0.0, 0.0);
 
   // left (top) paddle
   paddle_left = &blockgroup.GetBlockMutable(1);
@@ -204,8 +212,17 @@ void ModelGripper::PositionPaddles()
   UnMap(layer);
 
   double paddle_center_pos = cfg.paddle_position * (0.5 - cfg.paddle_size.y);
+  //double paddle_center_pos = cfg.paddle_position * (cfg.paddle_size.y);
+  
   paddle_left->SetCenterY(paddle_center_pos + cfg.paddle_size.y / 2.0);
+  //paddle_left->SetCenterY(paddle_center_pos + cfg.paddle_size.y / 2.0);
   paddle_right->SetCenterY(1.0 - paddle_center_pos - cfg.paddle_size.y / 2.0);
+  //paddle_right->SetCenterY(1.0 - paddle_center_pos - cfg.paddle_size.y / 2.0);
+  
+  /*printf("paddle_center_pos %f\n", paddle_center_pos);
+  printf("paddle_left %f\n", paddle_center_pos + cfg.paddle_size.y / 2.0);
+  printf("paddle_right %f\n", 1.0 - paddle_center_pos - cfg.paddle_size.y / 2.0);
+*/
 
   double paddle_bottom = cfg.lift_position * (1.0 - cfg.paddle_size.z);
   double paddle_top = paddle_bottom + cfg.paddle_size.z;
@@ -270,7 +287,9 @@ void ModelGripper::Update()
     if (cfg.gripped && (cfg.paddle_position == 0.0 || cfg.paddle_position < cfg.close_limit)) {
       // move it to the new location
       cfg.gripped->SetParent(NULL);
-      cfg.gripped->SetPose(this->GetGlobalPose());
+      Pose p = this->GetGlobalPose();
+      p.z = 0;
+      cfg.gripped->SetPose(p);
       cfg.gripped = NULL;
 
       cfg.close_limit = 1.0;
@@ -303,7 +322,7 @@ void ModelGripper::Update()
   case LIFT_UPPING:
     cfg.lift_position += 0.05;
 
-    if (cfg.lift_position > 1.0) // if we're fully open
+    if (cfg.lift_position > 0.1) // if we're fully open
     {
       cfg.lift_position = 1.0;
       cfg.lift = LIFT_UP; // change state
@@ -311,6 +330,11 @@ void ModelGripper::Update()
     break;
 
   case LIFT_DOWN: // nothing to do for these cases
+   /* cfg.gripped->SetParent(NULL);
+    cfg.gripped->SetPose(this->GetGlobalPose());
+    cfg.gripped = NULL;
+    break;
+*/
   case LIFT_UP:
   default: break;
   }
@@ -337,7 +361,7 @@ static bool gripper_raytrace_match(Model *hit, const Model *finder, const void *
 
 void ModelGripper::UpdateBreakBeams()
 {
-  for (unsigned int index = 0; index < 2; index++) {
+  for (unsigned int index = 0; index < 5; index++) {
     Pose pz;
 
     // x location of break beam origin
@@ -380,6 +404,10 @@ void ModelGripper::UpdateContacts()
   lpz.x = ((1.0 - cfg.paddle_size.x) * geom.size.x) - geom.size.x / 2.0;
   rpz.x = ((1.0 - cfg.paddle_size.x) * geom.size.x) - geom.size.x / 2.0;
 
+
+  //lpz.x = 1.0;
+  //rpz.x = 1.0;
+
   //   //double inset = beam ? cfg->inner_break_beam_inset :
   //   cfg->outer_break_beam_inset;
   //   //pz.x = (geom.size.x - inset * geom.size.x) - geom.size.x/2.0;
@@ -390,8 +418,19 @@ void ModelGripper::UpdateContacts()
 
   rpz.y = (1.0 - cfg.paddle_position) * -((geom.size.y / 2.0) - (geom.size.y * cfg.paddle_size.y));
 
-  lpz.z = 0.0; // todo
-  rpz.z = 0.0;
+  //lpz.y = 1.0;
+  //rpz.y = 1.0;
+
+  lpz.z = (1.0 - cfg.paddle_position) * ((geom.size.z / 2.0) - (geom.size.z * cfg.paddle_size.z));
+
+  rpz.z = (1.0 - cfg.paddle_position) * -((geom.size.z / 2.0) - (geom.size.z * cfg.paddle_size.z));
+
+  //lpz.z = 0.0; // todo
+  //rpz.z = 0.0;
+
+  //lpz.z = 1.0; // todo
+  //rpz.z = 1.0;
+
 
   // paddle beam local heading
   lpz.a = 0.0;
@@ -399,6 +438,8 @@ void ModelGripper::UpdateContacts()
 
   // paddle beam max range
   double bbr = cfg.paddle_size.x * geom.size.x;
+  //TO TEST  IF 2 FIXED WORKS
+  bbr = 2;
 
   cfg.contact[0] = Raytrace(lpz, bbr, gripper_raytrace_match, NULL, true).mod;
   cfg.contact[1] = Raytrace(rpz, bbr, gripper_raytrace_match, NULL, true).mod;
@@ -411,7 +452,7 @@ void ModelGripper::UpdateContacts()
     //   {
     //     //puts( "left and right hit same thing" );
 
-    if (cfg.paddles == PADDLE_CLOSING) {
+    if (cfg.paddles == PADDLE_CLOSING || cfg.lift == LIFT_UPPING) {
       Model *hit = cfg.contact[0];
       if (!hit)
         hit = cfg.contact[1];
@@ -430,8 +471,8 @@ void ModelGripper::UpdateContacts()
 
         //       // grab the model we hit - very simple grip model for now
         hit->SetParent(this);
-        hit->SetPose(Pose(0, 0, -1.0 * geom.size.z, 0));
-
+        hit->SetPose(Pose(0, 0, -1.0 * geom.size.z -0.15 , 0));
+        //hit->SetPose(Pose(0, 0, -0.2, 0));
         cfg.gripped = hit;
 
         //       // calculate how far closed we can get the paddles now
