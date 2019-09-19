@@ -632,15 +632,14 @@ void ModelPosition::Shutdown(void)
 
 void ModelPosition::Stop()
 {
-  SetSpeed(0, 0, 0, 0);
+  SetSpeed(0, 0, 0);
 }
 
-void ModelPosition::SetSpeed(double x, double y, double z, double a)
+void ModelPosition::SetSpeed(double x, double y, double a)
 {
   control_mode = CONTROL_VELOCITY;
   goal.x = x;
   goal.y = y;
-  goal.z = z;
   goal.a = a;
 }
 
