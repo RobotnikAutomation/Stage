@@ -2854,7 +2854,7 @@ Models and visualized. */
 
   /** Sets the control_mode to CONTROL_VELOCITY and sets
 the goal velocity. */
-  void SetSpeed(double x, double y, double z, double a);
+  void SetSpeed(double x, double y, double a);
   void SetXSpeed(double x);
   void SetYSpeed(double y);
   void SetZSpeed(double z);
